@@ -17,7 +17,9 @@ class CsvDictsAdapter(object):
 
     def next(self):
         row = self.source.next()
-
+        for k, v in row.items():
+            if isinstance(v, basestring):
+                row[k] = v.encode('utf-8')
         self.buffer.truncate(0)
         self.buffer.seek(0)
 
