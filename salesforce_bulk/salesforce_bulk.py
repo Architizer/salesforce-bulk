@@ -16,6 +16,7 @@ import time
 import csv
 
 from . import bulk_states
+from . import csv_adapter
 
 UploadResult = namedtuple('UploadResult', 'id success created error')
 
@@ -269,43 +270,29 @@ class SalesforceBulk(object):
         return batch_id
 
     # Add a BulkDelete to the job - returns the batch id
-    def bulk_delete(self, job_id, object_type, where, batch_size=2500):
+    def bulk_delete(self, job_id, object_type,
+                    where, batch_size=2500, limit=1000):
+        from time import sleep
         query_job_id = self.create_query_job(object_type)
-        soql = "Select Id from %s where %s Limit 10000" % (object_type, where)
+        soql = "Select Id from %s where %s Limit %d" % (object_type, where, limit)
         query_batch_id = self.query(query_job_id, soql)
-        self.wait_for_batch(query_job_id, query_batch_id, timeout=120)
 
+        while not self.is_batch_done(query_job_id, query_batch_id):
+            sleep(10)
+        self.close_job(query_job_id)
+
+        res = self.get_batch_result_ids(query_batch_id, query_job_id)
+        q = self.get_batch_results(query_batch_id, res[0], query_job_id)
+        q.next()
         results = []
-
-        def save_results(tf, **kwargs):
-            results.append(tf.read())
-
-        flag = self.get_batch_results(
-            query_job_id, query_batch_id, callback=save_results)
+        for row in q:
+            results.append({'Id': unicode(row.strip('"'))})
 
         if job_id is None:
             job_id = self.create_job(object_type, "delete")
-        http = Http()
-        # Split a large CSV into manageable batches
-        batches = self.split_csv(csv, batch_size)
-        batch_ids = []
-
-        uri = self.endpoint + "/services/async/29.0/job/%s/batch" % job_id
-        headers = self.headers({"Content-Type": "text/csv"})
-        for batch in results:
-            resp = requests.post(uri, data=batch, headers=headers)
-            content = resp.content
-
-            if resp.status_code >= 400:
-                self.raise_error(content, resp.status)
-
-            tree = ET.fromstring(content)
-            batch_id = tree.findtext("{%s}id" % self.jobNS)
-
-            self.batches[batch_id] = job_id
-            batch_ids.append(batch_id)
-
-        return batch_ids
+        batch = self.post_bulk_batch(
+            job_id, csv_adapter.CsvDictsAdapter(iter(results)))
+        return (job_id, batch)
 
     def lookup_job_id(self, batch_id):
         try:
