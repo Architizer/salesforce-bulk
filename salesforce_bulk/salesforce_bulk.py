@@ -297,6 +297,10 @@ class SalesforceBulk(object):
         for row in q:
             results.append({'Id': unicode(row.strip('"'))})
 
+        if not len(results):
+            if job_id:
+                self.close_job(job_id)
+            return (None, None,)
         if job_id is None:
             job_id = self.create_job(object_type, "delete")
         batch = self.post_bulk_batch(
