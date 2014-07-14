@@ -3,12 +3,12 @@
 import os
 import sys
 
-import salesforce_bulk
-
 try:
     from setuptools import setup
 except ImportError:
     from distutils.core import setup
+
+version = '1.0.5'
 
 if sys.argv[-1] == 'publish':
     os.system('python setup.py sdist upload')
@@ -19,6 +19,7 @@ packages = [
 ]
 
 requires = [
+    'httplib2>=0.9',
     'requests>=2.2.1',
 ]
 
@@ -29,7 +30,7 @@ with open('LICENSE') as f:
 
 setup(
     name='salesforce-bulk',
-    version=salesforce_bulk.__version__,
+    version=version,
     description='Python interface to the Salesforce.com Bulk API.',
     long_description=readme,
     author='Scott Persinger',
